@@ -15,6 +15,7 @@
 namespace Pimcore\Bundle\EcommerceFrameworkBundle\Tracking\Tracker\Analytics;
 
 use Pimcore\Bundle\EcommerceFrameworkBundle\CartManager\ICart;
+use Pimcore\Bundle\EcommerceFrameworkBundle\CheckoutManager\ICheckoutStep as CheckoutManagerICheckoutStep;
 use Pimcore\Bundle\EcommerceFrameworkBundle\Model\AbstractOrder;
 use Pimcore\Bundle\EcommerceFrameworkBundle\Model\IProduct;
 use Pimcore\Bundle\EcommerceFrameworkBundle\Tracking\ICheckout;
@@ -40,19 +41,19 @@ class EnhancedEcommerce extends Tracker implements
     ICheckoutComplete
 {
     /**
-     * @return string
-     */
-    protected function getViewScriptPrefix()
-    {
-        return 'analytics/enhanced';
-    }
-
-    /**
      * Array of google dependencies to include before any tracking actions.
      *
      * @var array
      */
     protected $dependencies = ['ec'];
+
+    /**
+     * @inheritdoc
+     */
+    protected function getViewScriptPrefix()
+    {
+        return 'analytics/enhanced';
+    }
 
     /**
      * Track product view
@@ -68,7 +69,8 @@ class EnhancedEcommerce extends Tracker implements
         unset($parameterBag['productData']['price']);
         unset($parameterBag['productData']['quantity']);
 
-        $result = $this->renderer->render($this->getViewScript('product_view'), $parameterBag);
+        $result = $this->templatingEngine->render($this->getViewScript('product_view'), $parameterBag);
+
         Analytics::addAdditionalCode($result, 'beforePageview');
     }
 
@@ -83,19 +85,28 @@ class EnhancedEcommerce extends Tracker implements
 
         $parameterBag['productData'] = $this->transformProductImpression($item);
 
-        $result = $this->renderer->render($this->getViewScript('product_impression'), $parameterBag);
+        $result = $this->templatingEngine->render($this->getViewScript('product_impression'), $parameterBag);
+
         Analytics::addAdditionalCode($result, 'beforePageview');
     }
 
     /**
+     * Track product action add
+     *
      * @param IProduct $product
-     * @param int $quantity
+     * @param int|float $quantity
      */
     public function trackProductActionAdd(IProduct $product, $quantity = 1)
     {
         $this->trackProductAction($product, 'add', $quantity);
     }
 
+    /**
+     * Track product remove from cart
+     *
+     * @param IProduct $product
+     * @param int|float $quantity
+     */
     public function trackProductActionRemove(IProduct $product, $quantity = 1)
     {
         $this->trackProductAction($product, 'remove', $quantity);
@@ -104,7 +115,7 @@ class EnhancedEcommerce extends Tracker implements
     /**
      * @param $product
      * @param $action
-     * @param int $quantity
+     * @param int|float $quantity
      */
     protected function trackProductAction($product, $action, $quantity = 1)
     {
@@ -114,7 +125,8 @@ class EnhancedEcommerce extends Tracker implements
         $parameterBag['productData'] = $this->transformProductAction($item);
         $parameterBag['action'] = $action;
 
-        $result = $this->renderer->render($this->getViewScript('product_action'), $parameterBag);
+        $result = $this->templatingEngine->render($this->getViewScript('product_action'), $parameterBag);
+
         Analytics::addAdditionalCode($result, 'beforePageview');
     }
 
@@ -132,23 +144,24 @@ class EnhancedEcommerce extends Tracker implements
 
         $parameterBag['actionData'] = ['step' => 1];
 
-        $result = $this->renderer->render($this->getViewScript('checkout'), $parameterBag);
+        $result = $this->templatingEngine->render($this->getViewScript('checkout'), $parameterBag);
 
         Analytics::addAdditionalCode($result, 'beforePageview');
     }
 
     /**
-     * @param \Pimcore\Bundle\EcommerceFrameworkBundle\CheckoutManager\ICheckoutStep $step
+     * @param CheckoutManagerICheckoutStep $step
      * @param ICart $cart
      * @param null $stepNumber
      * @param null $checkoutOption
      */
-    public function trackCheckoutStep(\Pimcore\Bundle\EcommerceFrameworkBundle\CheckoutManager\ICheckoutStep $step, ICart $cart, $stepNumber = null, $checkoutOption = null)
+    public function trackCheckoutStep(CheckoutManagerICheckoutStep $step, ICart $cart, $stepNumber = null, $checkoutOption = null)
     {
         $items = $this->getTrackingItemBuilder()->buildCheckoutItemsByCart($cart);
 
         $parameterBag['items'] = $items;
         $parameterBag['calls'] = [];
+
         if (!is_null($stepNumber) || !is_null($checkoutOption)) {
             $actionData = ['step' => $stepNumber];
 
@@ -159,7 +172,7 @@ class EnhancedEcommerce extends Tracker implements
             $parameterBag['actionData'] = $actionData;
         }
 
-        $result = $this->renderer->render($this->getViewScript('checkout'), $parameterBag);
+        $result = $this->templatingEngine->render($this->getViewScript('checkout'), $parameterBag);
 
         Analytics::addAdditionalCode($result, 'beforePageview');
     }
@@ -178,7 +191,8 @@ class EnhancedEcommerce extends Tracker implements
         $parameterBag['items'] = $items;
         $parameterBag['calls'] = $this->buildCheckoutCompleteCalls($transaction, $items);
 
-        $result = $this->renderer->render($this->getViewScript('checkout_complete'), $parameterBag);
+        $result = $this->templatingEngine->render($this->getViewScript('checkout_complete'), $parameterBag);
+
         Analytics::addAdditionalCode($result, 'beforePageview');
     }
 
@@ -210,18 +224,17 @@ class EnhancedEcommerce extends Tracker implements
     protected function transformTransaction(Transaction $transaction)
     {
         return [
-            'id' => $transaction->getId(),                  // order ID - required
-            'affilation' => $transaction->getAffiliation() ?: '',   // affiliation or store name
-            'revenue' => round($transaction->getTotal(), 2),     // total - required
-            'tax' => round($transaction->getTax(), 2),       // tax
-            'shipping' => round($transaction->getShipping(), 2),   // shipping
+            'id'         => $transaction->getId(),                           // order ID - required
+            'affilation' => $transaction->getAffiliation() ?: '',            // affiliation or store name
+            'revenue'    => round($transaction->getTotal(), 2),     // total - required
+            'tax'        => round($transaction->getTax(), 2),       // tax
+            'shipping'   => round($transaction->getShipping(), 2),  // shipping
         ];
     }
 
     protected function buildCheckoutCalls(array $items)
     {
         $calls = [];
-
         foreach ($items as $item) {
             $calls[] = $this->transformProductAction($item);
         }
@@ -254,7 +267,7 @@ class EnhancedEcommerce extends Tracker implements
     /**
      * Transform product action into enhanced data object
      *
-     * @param ProductAction $item
+     * @param ProductImpression $item
      *
      * @return array
      */
