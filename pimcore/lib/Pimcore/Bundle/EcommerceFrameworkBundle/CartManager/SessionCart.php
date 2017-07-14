@@ -24,7 +24,7 @@ class SessionCart extends AbstractCart implements ICart
      */
     protected function getCartItemClassName()
     {
-        return '\Pimcore\Bundle\EcommerceFrameworkBundle\CartManager\SessionCartItem';
+        return SessionCartItem::class;
     }
 
     /**
@@ -32,7 +32,7 @@ class SessionCart extends AbstractCart implements ICart
      */
     protected function getCartCheckoutDataClassName()
     {
-        return '\Pimcore\Bundle\EcommerceFrameworkBundle\CartManager\SessionCartCheckoutData';
+        return SessionCartCheckoutData::class;
     }
 
     /**

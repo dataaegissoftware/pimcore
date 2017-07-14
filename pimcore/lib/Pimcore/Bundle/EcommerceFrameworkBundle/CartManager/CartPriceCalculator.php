@@ -19,7 +19,7 @@ namespace Pimcore\Bundle\EcommerceFrameworkBundle\CartManager;
 
 use Pimcore\Bundle\EcommerceFrameworkBundle\CartManager\CartPriceModificator\ICartPriceModificator;
 use Pimcore\Bundle\EcommerceFrameworkBundle\Exception\UnsupportedException;
-use Pimcore\Bundle\EcommerceFrameworkBundle\Factory;
+use Pimcore\Bundle\EcommerceFrameworkBundle\IEnvironment;
 use Pimcore\Bundle\EcommerceFrameworkBundle\Model\Currency;
 use Pimcore\Bundle\EcommerceFrameworkBundle\PriceSystem\IModificatedPrice;
 use Pimcore\Bundle\EcommerceFrameworkBundle\PriceSystem\IPrice;
@@ -29,6 +29,16 @@ use Pimcore\Bundle\EcommerceFrameworkBundle\Type\Decimal;
 
 class CartPriceCalculator implements ICartPriceCalculator
 {
+    /**
+     * @var IEnvironment
+     */
+    protected $environment;
+
+    /**
+     * @var ICart
+     */
+    protected $cart;
+
     /**
      * @var bool
      */
@@ -55,22 +65,18 @@ class CartPriceCalculator implements ICartPriceCalculator
     protected $modifications;
 
     /**
-     * @var ICart
-     */
-    protected $cart;
-
-    private $config;
-
-    /**
-     * @param $config
+     * @param IEnvironment $environment
      * @param ICart $cart
+     * @param ICartPriceModificator[] $modificators
      */
-    public function __construct($config, ICart $cart)
+    public function __construct(IEnvironment $environment, ICart $cart, array $modificators = [])
     {
-        $this->cart = $cart;
-        $this->isCalculated = false;
-        $this->config=$config;
-        $this->initModificators();
+        $this->environment = $environment;
+        $this->cart        = $cart;
+
+        foreach ($modificators as $modificator) {
+            $this->addModificator($modificator);
+        }
     }
 
     /**
@@ -183,29 +189,13 @@ class CartPriceCalculator implements ICartPriceCalculator
     }
 
     /**
-     * Re-initialise the price modificators, e.g. after removing an item from a cart
-     * within the same request, such as an AJAX-call.
-     */
-    public function initModificators()
-    {
-        $config = $this->config;
-        $this->modificators = [];
-        if (!empty($config->modificators) && is_object($config->modificators)) {
-            foreach ($config->modificators as $modificator) {
-                $modificatorClass = new $modificator->class($modificator->config);
-                $this->addModificator($modificatorClass);
-            }
-        }
-    }
-
-    /**
      * gets default currency object based on the default currency locale defined in the environment
      *
      * @return Currency
      */
     protected function getDefaultCurrency()
     {
-        return Factory::getInstance()->getEnvironment()->getDefaultCurrency();
+        return $this->environment->getDefaultCurrency();
     }
 
     /**
