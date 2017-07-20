@@ -18,16 +18,14 @@ use Pimcore\Bundle\EcommerceFrameworkBundle\CartManager\ICart;
 use Pimcore\Bundle\EcommerceFrameworkBundle\Exception\UnsupportedException;
 use Pimcore\Bundle\EcommerceFrameworkBundle\Factory;
 use Pimcore\Bundle\EcommerceFrameworkBundle\Model\AbstractOrder;
+use Pimcore\Bundle\EcommerceFrameworkBundle\PaymentManager\IStatus;
 use Pimcore\Bundle\EcommerceFrameworkBundle\PaymentManager\Payment\IPayment;
 use Pimcore\Bundle\EcommerceFrameworkBundle\Tools\Config\HelperContainer;
 
-/**
- * Class \Pimcore\Bundle\EcommerceFrameworkBundle\CheckoutManager\CheckoutManager
- */
 class CheckoutManager implements ICheckoutManager
 {
     /**
-     * constants for custom environment item names for persisting state of checkout
+     * Constants for custom environment item names for persisting state of checkout
      * always concatenated with current cart id
      */
     const CURRENT_STEP = 'checkout_current_step';
@@ -36,14 +34,14 @@ class CheckoutManager implements ICheckoutManager
     const TRACK_ECOMMERCE_UNIVERSAL = 'checkout_trackecommerce_universal';
 
     /**
-     * needed for effective access to one specific checkout step
+     * Needed for effective access to one specific checkout step
      *
      * @var ICheckoutStep[]
      */
     protected $checkoutSteps;
 
     /**
-     * needed for preserving order of checkout steps
+     * Needed for preserving order of checkout steps
      *
      * @var ICheckoutStep[]
      */
@@ -93,7 +91,7 @@ class CheckoutManager implements ICheckoutManager
 
     /**
      * @param ICart $cart
-     * @param                            $config
+     * @param $config
      */
     public function __construct(ICart $cart, $config)
     {
@@ -126,7 +124,7 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * creates, configures and returns commit order processor
+     * Creates, configures and returns commit order processor
      *
      * @return ICommitOrderProcessor
      */
@@ -141,7 +139,7 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * @return bool
+     * @inheritdoc
      */
     public function hasActivePayment()
     {
@@ -157,10 +155,7 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * @return \Pimcore\Bundle\EcommerceFrameworkBundle\Model\AbstractPaymentInformation
-     *
-     * @throws \Exception
-     * @throws UnsupportedException
+     * @inheritdoc
      */
     public function startOrderPayment()
     {
@@ -193,7 +188,7 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * @return null|AbstractOrder
+     * @inheritdoc
      */
     public function cancelStartedOrderPayment()
     {
@@ -209,7 +204,7 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * @return AbstractOrder
+     * @inheritdoc
      */
     public function getOrder()
     {
@@ -247,17 +242,12 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * @param $paymentResponseParams
-     *
-     * @return AbstractOrder
-     *
-     * @throws UnsupportedException
+     * @inheritdoc
      */
     public function handlePaymentResponseAndCommitOrderPayment($paymentResponseParams)
     {
-
-        //check if order is already committed and payment information with same internal payment id has same state
-        //if so, do nothing and return order
+        // check if order is already committed and payment information with same internal payment id has same state
+        // if so, do nothing and return order
         if ($committedOrder = $this->getCommitOrderProcessor()->committedOrderWithSamePaymentExists($paymentResponseParams, $this->getPayment())) {
             return $committedOrder;
         }
@@ -282,13 +272,9 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * @param \Pimcore\Bundle\EcommerceFrameworkBundle\PaymentManager\IStatus $status
-     *
-     * @return AbstractOrder
-     *
-     * @throws UnsupportedException
+     * @inheritdoc
      */
-    public function commitOrderPayment(\Pimcore\Bundle\EcommerceFrameworkBundle\PaymentManager\IStatus $status)
+    public function commitOrderPayment(IStatus $status)
     {
         if (!$this->payment) {
             throw new UnsupportedException('Payment is not activated');
@@ -310,9 +296,7 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * @return AbstractOrder
-     *
-     * @throws UnsupportedException
+     * @inheritdoc
      */
     public function commitOrder()
     {
@@ -334,6 +318,8 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
+     * TODO deprecated?
+     *
      * generates classic google analytics e-commerce tracking code
      *
      * @param AbstractOrder $order
@@ -404,6 +390,8 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
+     * TODO deprecated?
+     *
      * generates universal google analytics e-commerce tracking code
      *
      * @param AbstractOrder $order
@@ -471,12 +459,7 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * @param ICheckoutStep $step
-     * @param mixed $data
-     *
-     * @return bool
-     *
-     * @throws UnsupportedException
+     * @inheritdoc
      */
     public function commitStep(ICheckoutStep $step, $data)
     {
@@ -518,7 +501,7 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * @return ICart
+     * @inheritdoc
      */
     public function getCart()
     {
@@ -526,9 +509,7 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * @param string $stepname
-     *
-     * @return ICheckoutStep
+     * @inheritdoc
      */
     public function getCheckoutStep($stepname)
     {
@@ -536,7 +517,7 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * @return ICheckoutStep[]
+     * @inheritdoc
      */
     public function getCheckoutSteps()
     {
@@ -544,7 +525,7 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * @return ICheckoutStep
+     * @inheritdoc
      */
     public function getCurrentStep()
     {
@@ -552,7 +533,7 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * @return bool
+     * @inheritdoc
      */
     public function isFinished()
     {
@@ -560,24 +541,27 @@ class CheckoutManager implements ICheckoutManager
     }
 
     /**
-     * @return bool
+     * @inheritdoc
      */
     public function isCommitted()
     {
         $orderManager = Factory::getInstance()->getOrderManager();
         $order = $orderManager->getOrderFromCart($this->cart);
 
-        return $order && $order->getOrderState() == $order::ORDER_STATE_COMMITTED;
+        return $order && $order->getOrderState() === $order::ORDER_STATE_COMMITTED;
     }
 
     /**
-     * @return IPayment
+     * @inheritdoc
      */
     public function getPayment()
     {
         return $this->payment;
     }
 
+    /**
+     * @inheritdoc
+     */
     public function cleanUpPendingOrders()
     {
         $this->getCommitOrderProcessor()->cleanUpPendingOrders();
