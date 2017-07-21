@@ -24,9 +24,9 @@ use Pimcore\Config\Config;
 use Symfony\Component\Form\Extension\Core\Type\FormType;
 use Symfony\Component\Form\Extension\Core\Type\HiddenType;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\Forms;
 
-// TODO refine how payment amounts are transformed for API
 class QPay implements IPayment
 {
     // supported hashing algorithms
@@ -152,16 +152,25 @@ class QPay implements IPayment
     }
 
     /**
+     * Start payment
+     *
      * @param IPrice $price
      * @param array $config
      *
-     * @return \Symfony\Component\Form\FormBuilderInterface
+     * @return FormBuilderInterface
+     * @throws \Exception
      */
     public function initPayment(IPrice $price, array $config)
     {
         // check params
         $required = [
-            'successURL' => null, 'cancelURL' => null, 'failureURL' => null, 'serviceURL' => null, 'orderDescription' => null, 'orderIdent' => null, 'language' => null
+            'successURL'       => null,
+            'cancelURL'        => null,
+            'failureURL'       => null,
+            'serviceURL'       => null,
+            'orderDescription' => null,
+            'orderIdent'       => null,
+            'language'         => null
         ];
 
         $check = array_intersect_key($config, $required);
@@ -232,6 +241,8 @@ class QPay implements IPayment
     }
 
     /**
+     * Handles response of payment provider and creates payment status object
+     *
      * @param mixed $response
      *
      * @return IStatus
@@ -249,7 +260,10 @@ class QPay implements IPayment
         ];
 
         $authorizedData = [
-            'orderNumber' => null, 'language' => null, 'amount' => null, 'currency' => null
+            'orderNumber' => null,
+            'language'    => null,
+            'amount'      => null,
+            'currency'    => null
         ];
 
         // check fields
@@ -292,15 +306,16 @@ class QPay implements IPayment
                 ? IStatus::STATUS_AUTHORIZED
                 : IStatus::STATUS_CANCELLED,
             [
-                'qpay_amount' => (string)$price, 'qpay_paymentType' => $response['paymentType'], 'qpay_paymentState' => $response['paymentState'], 'qpay_response' => $response
+                'qpay_amount'       => (string)$price,
+                'qpay_paymentType'  => $response['paymentType'],
+                'qpay_paymentState' => $response['paymentState'],
+                'qpay_response'     => $response
             ]
         );
     }
 
     /**
-     * return the authorized data from payment provider
-     *
-     * @return array
+     * @inheritdoc
      */
     public function getAuthorizedData()
     {
@@ -308,9 +323,7 @@ class QPay implements IPayment
     }
 
     /**
-     * set authorized data from payment provider
-     *
-     * @param array $authorizedData
+     * @inheritdoc
      */
     public function setAuthorizedData(array $authorizedData)
     {
@@ -318,13 +331,13 @@ class QPay implements IPayment
     }
 
     /**
-     * execute payment
+     * Executes payment
      *
      *  if price is given, recurPayment command is executed
      *  if no price is given, amount from authorized Data is used and deposit command is executed
      *
      * @param IPrice $price
-     * @param string                      $reference
+     * @param string $reference
      *
      * @return IStatus
      *
@@ -404,7 +417,9 @@ class QPay implements IPayment
                 '',
                 IStatus::STATUS_CLEARED,
                 [
-                    'qpay_amount' => (string)$price, 'qpay_command' => $request['command'], 'qpay_response' => $response
+                    'qpay_amount'   => (string)$price,
+                    'qpay_command'  => $request['command'],
+                    'qpay_response' => $response
                 ]
             );
         } elseif ($response['errors']) {
@@ -421,7 +436,9 @@ class QPay implements IPayment
                 implode("\n", $error),
                 IStatus::STATUS_CANCELLED,
                 [
-                    'qpay_amount' => (string)$price, 'qpay_command' => $request['command'], 'qpay_response' => $response
+                    'qpay_amount'   => (string)$price,
+                    'qpay_command'  => $request['command'],
+                    'qpay_response' => $response
                 ]
             );
         } else {
@@ -430,13 +447,14 @@ class QPay implements IPayment
     }
 
     /**
-     * execute credit
+     * Executes credit
      *
      * @param IPrice $price
-     * @param string                      $reference
-     * @param                             $transactionId
+     * @param string $reference
+     * @param $transactionId
      *
      * @return IStatus
+     * @throws \Exception
      */
     public function executeCredit(IPrice $price, $reference, $transactionId)
     {
@@ -455,7 +473,15 @@ class QPay implements IPayment
 
         // add fingerprint
         $request['requestFingerprint'] = $this->computeFingerprint([
-            $request['customerId'], $request['toolkitPassword'], $this->secret, $request['command'], $request['language'], $request['orderNumber'], $request['amount'], $request['currency'], $request['merchantReference']
+            $request['customerId'],
+            $request['toolkitPassword'],
+            $this->secret,
+            $request['command'],
+            $request['language'],
+            $request['orderNumber'],
+            $request['amount'],
+            $request['currency'],
+            $request['merchantReference']
         ]);
 
         // execute request
@@ -471,7 +497,9 @@ class QPay implements IPayment
                 'executeCredit',
                 IStatus::STATUS_CLEARED,
                 [
-                    'qpay_amount' => (string)$price, 'qpay_command' => $request['command'], 'qpay_response' => $response
+                    'qpay_amount'   => (string)$price,
+                    'qpay_command'  => $request['command'],
+                    'qpay_response' => $response
                 ]
             );
         } elseif ($response['errorCode']) {
@@ -483,7 +511,9 @@ class QPay implements IPayment
                 $response['message'],
                 IStatus::STATUS_CANCELLED,
                 [
-                    'qpay_amount' => (string)$price, 'qpay_command' => $request['command'], 'qpay_response' => $response
+                    'qpay_amount'   => (string)$price,
+                    'qpay_command'  => $request['command'],
+                    'qpay_response' => $response
                 ]
             );
         } else {
@@ -548,6 +578,7 @@ class QPay implements IPayment
         foreach ($params as $key => $value) {
             $postFields .= $key . '=' . $value . '&';
         }
+
         $postFields = substr($postFields, 0, strlen($postFields) - 1);
 
         $curl = curl_init();
