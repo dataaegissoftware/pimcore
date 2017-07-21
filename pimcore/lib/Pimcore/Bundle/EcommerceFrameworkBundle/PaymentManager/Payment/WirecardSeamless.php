@@ -17,18 +17,23 @@ namespace Pimcore\Bundle\EcommerceFrameworkBundle\PaymentManager\Payment;
 use Pimcore\Bundle\EcommerceFrameworkBundle\CartManager\ICart;
 use Pimcore\Bundle\EcommerceFrameworkBundle\CheckoutManager\CheckoutManager;
 use Pimcore\Bundle\EcommerceFrameworkBundle\Factory;
+use Pimcore\Bundle\EcommerceFrameworkBundle\IEnvironment;
 use Pimcore\Bundle\EcommerceFrameworkBundle\Model\AbstractPaymentInformation;
 use Pimcore\Bundle\EcommerceFrameworkBundle\Model\Currency;
 use Pimcore\Bundle\EcommerceFrameworkBundle\PaymentManager\IStatus;
 use Pimcore\Bundle\EcommerceFrameworkBundle\PaymentManager\Status;
 use Pimcore\Bundle\EcommerceFrameworkBundle\PriceSystem\IPrice;
 use Pimcore\Bundle\EcommerceFrameworkBundle\PriceSystem\Price;
+use Pimcore\Bundle\EcommerceFrameworkBundle\Tools\SessionConfigurator;
 use Pimcore\Bundle\EcommerceFrameworkBundle\Type\Decimal;
 use Pimcore\Config\Config;
 use Pimcore\Logger;
 use Pimcore\Model\Object\Fieldcollection\Data\OrderPriceModifications;
 use Pimcore\Model\Object\OnlineShopOrder;
 use Pimcore\Tool;
+use Symfony\Component\HttpFoundation\Session\Attribute\AttributeBagInterface;
+use Symfony\Component\HttpFoundation\Session\SessionInterface;
+use Symfony\Component\Templating\EngineInterface;
 
 class WirecardSeamless implements IPayment
 {
@@ -38,6 +43,23 @@ class WirecardSeamless implements IPayment
     const PAYMENT_RETURN_STATE_PENDING = 'pending';
 
     const ENCODED_ORDERIDENT_DELIMITER = '---';
+
+    const SESSION_KEY_STORAGE_ID = 'Wirecard_dataStorageId';
+
+    /**
+     * @var EngineInterface
+     */
+    protected $templatingEngine;
+
+    /**
+     * @var SessionInterface
+     */
+    protected $session;
+
+    /**
+     * @var array
+     */
+    protected $authorizedData;
 
     private $settings;
     private $partial;
@@ -51,18 +73,11 @@ class WirecardSeamless implements IPayment
     private $WEBSITE_URL;
     private $CHECKOUT_WINDOW_NAME;
 
-    /**
-     * @var array
-     */
-    protected $authorizedData;
-
-    /**
-     * @param Config $config
-     *
-     * @throws \Exception
-     */
-    public function __construct(Config $config)
+    public function __construct(Config $config, EngineInterface $templatingEngine, SessionInterface $session)
     {
+        $this->templatingEngine = $templatingEngine;
+        $this->session          = $session;
+
         $this->settings = $config->config->{$config->mode};
         $this->partial = $config->partial;
         $this->js = $config->js;
@@ -84,6 +99,14 @@ class WirecardSeamless implements IPayment
     public function getName()
     {
         return 'WirecardSeamless';
+    }
+
+    protected function getSessionBag(): AttributeBagInterface
+    {
+        /** @var AttributeBagInterface $bag */
+        $bag = $this->session->getBag(SessionConfigurator::ATTRIBUTE_BAG_PAYMENT_ENVIRONMENT);
+
+        return $bag;
     }
 
     /**
@@ -125,8 +148,8 @@ class WirecardSeamless implements IPayment
 
         $result = $this->serverToServerRequest($this->URL_DATASTORAGE_INIT, $postFields);
 
-        // TODO replace with session object!
-        $_SESSION['Wirecard_dataStorageId'] = $result['storageId'];
+        $this->getSessionBag()->set(self::SESSION_KEY_STORAGE_ID, $result['storageId']);
+
         $javascriptURL = $result['javascriptUrl'];
 
         $params = [];
@@ -137,10 +160,7 @@ class WirecardSeamless implements IPayment
 
         $params['wirecardFrontendScript'] = $this->js;
 
-        //TODO inject this via container
-        $renderer =  \Pimcore::getContainer()->get('templating');
-
-        return $renderer->render($this->partial, $params);
+        return $this->templatingEngine->render($this->partial, $params);
     }
 
     public function getInitPaymentRedirectUrl($config)
@@ -182,7 +202,7 @@ class WirecardSeamless implements IPayment
             'confirmUrl' => $confirmURL,
             'consumerUserAgent' => $_SERVER['HTTP_USER_AGENT'],
             'consumerIpAddress' => $_SERVER['REMOTE_ADDR'],
-            'storageId' => $_SESSION['Wirecard_dataStorageId'],
+            'storageId' => $this->getSessionBag()->get(self::SESSION_KEY_STORAGE_ID),
             'orderIdent' => $orderIdent,
             'windowName' => $this->CHECKOUT_WINDOW_NAME,
             // 'duplicateRequestCheck' => 'yes'
@@ -654,7 +674,15 @@ class WirecardSeamless implements IPayment
         return $r;
     }
 
-    public static function createCartByOrderIdent($response)
+    /**
+     * Environment was kept optional for backwards compatibility, but should be passed if possible
+     *
+     * @param $response
+     * @param IEnvironment|null $environment
+     *
+     * @return ICart|null
+     */
+    public static function createCartByOrderIdent($response, IEnvironment $environment = null)
     {
         $orderIdent = $response['orderIdent'];
         $orderIdent = explode(self::ENCODED_ORDERIDENT_DELIMITER, $orderIdent);
@@ -667,8 +695,8 @@ class WirecardSeamless implements IPayment
                 $cart = new $cartId[0];
                 $cart->setId($cartId[1]);
 
-                $env = Factory::getInstance()->getEnvironment();
-                $env->setCustomItem(CheckoutManager::FINISHED . '_' . $cart->getId(), true);
+                $environment = $environment ?? Factory::getInstance()->getEnvironment();
+                $environment->setCustomItem(CheckoutManager::FINISHED . '_' . $cart->getId(), true);
 
                 return $cart;
             }
