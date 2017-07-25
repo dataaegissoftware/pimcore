@@ -19,7 +19,6 @@ use Pimcore\Bundle\EcommerceFrameworkBundle\Tools\SessionConfigurator;
 use Pimcore\Service\Locale;
 use Pimcore\Tool;
 use Symfony\Component\HttpFoundation\Session\Attribute\AttributeBagInterface;
-use Symfony\Component\HttpFoundation\Session\SessionBagInterface;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
 
 class Environment implements IEnvironment
@@ -33,10 +32,23 @@ class Environment implements IEnvironment
     const USER_ID_NOT_SET = -1;
 
     /**
+     * @var Locale
+     */
+    protected $localeService;
+
+    /**
      * @var SessionInterface
      */
     protected $session;
 
+    /**
+     * @var Currency
+     */
+    protected $defaultCurrency;
+
+    /**
+     * @var array
+     */
     protected $customItems = [];
 
     /**
@@ -49,35 +61,30 @@ class Environment implements IEnvironment
      */
     protected $useGuestCart = false;
 
-    protected $currentAssortmentTenant = null;
-    protected $currentAssortmentSubTenant = null;
-    protected $currentCheckoutTenant = null;
-
     /**
-     * @var Currency
+     * @var string
      */
-    protected $defaultCurrency = null;
+    protected $currentAssortmentTenant;
 
     /**
-     * locale set on container
+     * @var string
+     */
+    protected $currentAssortmentSubTenant;
+
+    /**
+     * @var string
+     */
+    protected $currentCheckoutTenant;
+
+    /**
+     * Current transient checkout tenant
      *
-     * @var Locale
-     */
-    protected $localeService = null;
-
-    /**
-     * @var SessionInterface
-     */
-    protected $containerSession = null;
-
-    /**
-     * current transient checkout tenant
-     * this value will not be stored into the session and is only valid for current process
+     * This value will not be stored into the session and is only valid for current process
      * set with setCurrentCheckoutTenant('tenant', false');
      *
      * @var string
      */
-    protected $currentTransientCheckoutTenant = null;
+    protected $currentTransientCheckoutTenant;
 
     public function __construct($config, SessionInterface $session, Locale $localeService)
     {
@@ -283,8 +290,6 @@ class Environment implements IEnvironment
      * sets current assortment tenant which is used for indexing and product lists
      *
      * @param $tenant string
-     *
-     * @return mixed
      */
     public function setCurrentAssortmentTenant($tenant)
     {
@@ -378,6 +383,7 @@ class Environment implements IEnvironment
             if (Tool::isValidLanguage($locale)) {
                 return (string) $locale;
             }
+
             throw new \Exception('Not supported language');
         } catch (\Exception $e) {
             return Tool::getDefaultLanguage();
